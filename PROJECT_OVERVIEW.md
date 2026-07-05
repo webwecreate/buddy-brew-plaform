@@ -19,6 +19,7 @@
 | Backend | Supabase (Postgres + Data API + Edge Functions) | ตั้งค่าเร็ว หน้าตา Table Editor คล้ายสเปรดชีตที่คุ้นเคยอยู่แล้ว ไม่ต้องเขียน backend เองทั้งหมดแบบ WordPress plugin |
 | Staff Panel / Admin Dashboard | เว็บ (ไม่ใช่แอป) | เปิดจากมือถือ/โน้ตบุ๊คได้ทันที ไม่ต้องผ่าน App Store |
 | ปริ้นเตอร์ (สำหรับเคส delivery) | Wongnai 58IIH (ESC/POS) เครื่องสำรองที่มีอยู่แล้ว ผูกเป็นเครื่องเฉพาะของ Buddy Brew | ปริ้นเตอร์ Bluetooth ที่ต่อกับ GrabMerchant แชร์กับระบบอื่นพร้อมกันไม่ได้ (Bluetooth Classic ต่อได้ทีละอุปกรณ์) |
+| Hosting หน้า LIFF | GitHub repo + GitHub Pages (โฟลเดอร์ `/docs`) | คุณมี GitHub อยู่แล้ว แก้โค้ด → commit → push แล้ว deploy อัตโนมัติ ไม่ต้องลากไฟล์อัปโหลดเองทุกครั้ง |
 
 ---
 
@@ -142,7 +143,10 @@ order_claim_tokens (id, token, channel, point_value, status, claimed_by, claimed
 - [x] สร้าง Supabase project (Singapore region)
 - [x] รัน `schema.sql` สร้างตาราง `members`
 - [x] เขียน Edge Function `create-or-get-member` (verify LINE ID token + upsert)
-- [x] เขียนหน้า LIFF login แรก (`liff/index.html`)
+- [x] เขียนหน้า LIFF login แรก (`docs/index.html` — ย้ายเข้าโฟลเดอร์ `docs` เพื่อให้ GitHub Pages serve ได้ตรง)
+- [x] Init git repo ในเครื่อง + commit แรก
+- [ ] Push ขึ้น GitHub repo จริง
+- [ ] เปิด GitHub Pages (Settings → Pages → Source: main branch, /docs folder)
 - [x] สร้าง Provider "Buddy Brew" ใน LINE Developers
 - [x] Enable Messaging API บน OA เดิมผ่าน LINE Official Account Manager
 - [x] สร้าง LINE Login channel + LIFF app (เพราะ LINE เปลี่ยนกฎ ต้องสร้างผ่าน LINE Login channel ไม่ใช่ Messaging API channel แล้ว)
