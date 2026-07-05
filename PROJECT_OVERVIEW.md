@@ -164,7 +164,8 @@ badges_earned (id, member_id FK, badge_id FK, earned_at)
 missions (id, title, type, reward_point)
 missions_progress (id, member_id FK, mission_id FK, status)
 rewards (id, name, point_cost)
-coupons (id, member_id FK, reward_id FK, code, status, expires_at)
+coupons (id, member_id FK, reward_id FK, code, status, source, expires_at)
+  -- source: 'birthday' / 'points_redemption' / 'manual' / ... ใช้เช็คกันแจกซ้ำ (ดูกฎ birthday ด้านล่าง)
 referrals (id, referrer_id FK, referred_id FK, created_at)
 order_claim_tokens (id, token, channel, point_value, status, claimed_by, claimed_at, expires_at)
   -- สำหรับเคส delivery (Grab/LINEMAN) ดูข้อ 7
@@ -229,7 +230,10 @@ promotions (id, title, description, tag, start_at, end_at, active)
 
 หลักการ: badge ไม่ให้ส่วนลด แค่ให้สะสม/โชว์ (ตามที่ brainstorm ไว้) — เก็บไว้ตัดสินใจอีกทีตอนสร้างจริงว่าจะให้รางวัลอะไรเพิ่มไหม
 
-**Birthday — ยังไม่มีวิธีเก็บค่าจริง**: คอลัมน์ `birthday` มีอยู่แล้วในตาราง `members` แต่ LINE ไม่ส่งวันเกิดมาให้ตอน login (scope `profile` ไม่มีข้อมูลนี้) ต้องทำหน้ากรอกแยก (เช่น ถามครั้งแรกหลัง login พร้อมแต้มจูงใจให้กรอก) — ยังไม่ได้ออกแบบหน้านี้
+**Birthday — มีหน้ากรอกแล้ว (หน้า "ข้อมูลของฉัน" ใน Buddy Book) แยกกฎเป็น 2 เรื่อง ห้ามปนกัน**
+
+1. **แต้มจูงใจให้กรอกวันเกิด** (+20 แต้ม) — ให้แค่ **ครั้งเดียวตลอดชีพ** เช็คจาก `points_transactions` ว่าเคยมีแถว `reason='birthday_field_bonus'` หรือยัง ถ้าเคยแล้วห้ามให้ซ้ำ ไม่ว่าจะแก้วันเกิดกี่รอบก็ตาม (ฟิลด์ `birthday` เองแก้ไขได้ตามปกติเผื่อกรอกผิด ไม่ล็อก)
+2. **โปรวันเกิดรายปี** (รับเครื่องดื่มฟรี ตามแผนเดิม) — เป็น **coupon ไม่ใช่แต้ม** ออกอัตโนมัติทุกปีตอนถึงวันเกิด (เดือน/วันตรงกับวันนี้) ผ่าน cron/Edge Function เพิ่มคอลัมน์ `source` ในตาราง `coupons` (ทำแล้ว) เช็คก่อนออกว่า **เคยออก coupon ที่ `source='birthday'` ให้สมาชิกคนนี้ภายใน 365 วันที่ผ่านมาหรือยัง** ถ้าเคยแล้วห้ามออกซ้ำ — ป้องกันแก้วันเกิดถี่ๆ เพื่อฉวยรับฟรีหลายรอบ ด้วยหลักการเดียวกับข้อ 1 (เช็คจากประวัติการออกรางวัลจริง ไม่ใช่จากค่าฟิลด์)
 
 ---
 
