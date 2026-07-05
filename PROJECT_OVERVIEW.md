@@ -127,13 +127,15 @@ bean_options (id, name, extra_price, active)
 **หลักการสำคัญที่ตกลงกันไว้**: เก็บข้อมูลระดับเมนูจริงเสมอ (ไม่ยุบรวม Latte/Cappuccino เป็นก้อนเดียวในฐานข้อมูล) — การจัดกลุ่มเพื่อความเร็วทำที่ชั้น **UI ของ Staff Panel เท่านั้น** ไม่กระทบข้อมูลที่เก็บจริง
 
 **Staff Panel — flow การกดสร้าง QR (wireframe อยู่ในแชท ทำใน claude.ai/design ต่อได้)**
-1. กด **ร้อน/เย็น** ก่อนเป็นอันดับแรก — **กรองเมนูที่เลือกต่อได้จริง** ไม่ใช่แค่เก็บข้อมูล CRM เฉยๆ (ใช้คอลัมน์ `available_hot`/`available_cold`)
+1. **ไม่มี step "ร้อน/เย็น" บังคับแล้ว** — ค่าเริ่มต้น = **เย็น** เสมอ (ออเดอร์ร้อนมีน้อยมาก) มีแค่ **toggle เล็กๆ ลอยมุมบน** ให้สลับเป็นร้อนได้ถ้าต้องการ (แตะครั้งเดียว) ลด step ของ staff สำหรับเคสส่วนใหญ่ (เย็น) ให้เหลือน้อยที่สุด — กรองเมนูตาม `available_hot`/`available_cold` เหมือนเดิม แค่ไม่บังคับถามทุกครั้ง
    - ร้อน: ไม่มี Signature เลย, Coffee มีแค่ Espresso/Americano/Latte/Cappuccino/Mocha/Drip Coffee, Matcha มีแค่ Clear Matcha/Matcha Latte, Non-Coffee มีแค่ Rich Cocoa/Oreo Milk/Taro Milk
-   - เย็น: มีครบทุกเมนู
+   - เย็น (default): มีครบทุกเมนู
 2. กดหมวดเมนู: Signature / Coffee / Matcha / Non-Coffee / Snack (หมวดที่ไม่มีเมนูเหลือหลังกรองร้อน/เย็นจะไม่โชว์ปุ่มให้กด)
 3. ถ้าเป็น Coffee → เมนูเรียงเป็น**รายการเดียว**ตาม `sort_order` (ไม่แยกนม/ส้ม/ดำแล้ว) เรียงตามความนิยม: Espresso, Americano, Latte, Cappuccino, Mocha, Es-Yen, Orange Espresso, Coconut Espresso, Caramel/Earl Grey/French Vanilla Latte, Drip Coffee (ล่างสุด)
 4. เลือกเมล็ด (ถ้าเมนูนั้นมี `has_bean_choice = true`)
 5. ระบบคำนวณราคา+แต้ม → สร้าง QR ใช้ครั้งเดียว
+
+หมายเหตุ: หน้าตา toggle จริง (swap/overlay-icon) ยังไม่ fix ค่อยออกแบบตอนทำ UI จริง หลักการที่ fix แล้วคือ "default เย็น ลด step ให้มากที่สุด"
 
 **Tier ให้ส่วนลดอะไร — ยังไม่ตัดสินใจ (รอข้อมูลจริงก่อน)**: แนวคิดเบื้องต้นที่คุยไว้คือ tier สูงอาจได้ส่วนลดขนม 10% แต่ยังไม่ fix ต้องรอดูพฤติกรรมจริงหลังเปิดใช้ก่อนค่อยตัดสินใจ (ไม่กระทบ schema ตอนนี้ — คอลัมน์ `tier` มีอยู่แล้วพร้อมใช้ทันทีที่ตัดสินใจ)
 
