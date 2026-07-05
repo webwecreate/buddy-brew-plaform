@@ -53,11 +53,19 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { data: existing } = await supabase
+    const { data: existing, error: selectError } = await supabase
       .from("members")
       .select("id, display_name, picture_url, tier, point, created_at")
       .eq("line_user_id", lineUserId)
       .maybeSingle();
+
+    if (selectError) {
+      console.error("select members failed:", selectError.message);
+      return new Response(JSON.stringify({ error: selectError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (existing) {
       return new Response(JSON.stringify({ member: existing, isNew: false }), {
@@ -72,6 +80,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (insertError) {
+      console.error("insert member failed:", insertError.message);
       return new Response(JSON.stringify({ error: insertError.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -82,6 +91,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    console.error("unhandled error:", err);
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
