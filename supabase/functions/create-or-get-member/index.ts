@@ -54,41 +54,28 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { data: existing, error: selectError } = await supabase
+    // Single round trip: insert on first login, or update display_name/picture_url
+    // on repeat logins (point/tier are untouched since they're not in this payload).
+    const { data: member, error: upsertError } = await supabase
       .from("members")
-      .select("id, display_name, picture_url, tier, point, created_at")
-      .eq("line_user_id", lineUserId)
-      .maybeSingle();
-
-    if (selectError) {
-      console.error("select members failed:", selectError.message);
-      return new Response(JSON.stringify({ error: selectError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (existing) {
-      return new Response(JSON.stringify({ member: existing, isNew: false }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: created, error: insertError } = await supabase
-      .from("members")
-      .insert({ line_user_id: lineUserId, display_name: displayName, picture_url: pictureUrl })
+      .upsert(
+        { line_user_id: lineUserId, display_name: displayName, picture_url: pictureUrl },
+        { onConflict: "line_user_id" },
+      )
       .select("id, display_name, picture_url, tier, point, created_at")
       .single();
 
-    if (insertError) {
-      console.error("insert member failed:", insertError.message);
-      return new Response(JSON.stringify({ error: insertError.message }), {
+    if (upsertError) {
+      console.error("upsert member failed:", upsertError.message);
+      return new Response(JSON.stringify({ error: upsertError.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ member: created, isNew: true }), {
+    const isNew = Date.now() - new Date(member.created_at).getTime() < 5000;
+
+    return new Response(JSON.stringify({ member, isNew }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
