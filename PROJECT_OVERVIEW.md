@@ -147,10 +147,18 @@ points_transactions (
   point_change,
   menu_item_id FK -> menu_items.id,   -- อ้างอิงเมนูจริง ไม่ใช่พิมพ์ข้อความอิสระ
   bean_option_id FK -> bean_options.id (nullable),
-  final_price,       -- snapshot ราคาตอนขายจริง (กันไม่ให้ประวัติเก่าเปลี่ยนถ้าแก้ราคาเมนูทีหลัง)
+  final_price,       -- snapshot ราคาที่ลูกค้าจ่ายจริง (เก็บไว้ดูยอดขาย/บัญชี ไม่ใช้คิดแต้ม — ดูกฎด้านล่าง)
   reason,           -- ใช้ตอนไม่ใช่การซื้อเมนู เช่น "birthday_bonus", "referral_bonus"
   created_at        -- ใช้เป็นเวลาสั่งซื้อด้วย → คำนวณ badge ตามช่วงเวลาได้ (Early Bird / Night Owl)
 )
+```
+
+**กฎสำคัญของ Reward Engine: คำนวณแต้มจาก `menu_items.base_price` เสมอ ไม่ใช้ `final_price` ที่ลูกค้าจ่ายจริง**
+- เหตุผล: ราคาบน Grab/LINEMAN ถูกบวกเพิ่มเพื่อกัน GP ของแพลตฟอร์ม สูงกว่าราคาหน้าร้านจริง ถ้าคิดแต้มจากราคานั้นจะเป็นสัดส่วนที่ผิด (delivery ได้แต้มเยอะกว่าหน้าร้านทั้งที่ร้านต้นทุนแพงกว่า)
+- สูตร: `point_change = floor((menu_items.base_price + bean_options.extra_price) / 10)` เสมอ ไม่ว่าจะเป็นช่องทางไหน (หน้าร้าน/delivery)
+- `final_price` ยังเก็บไว้เพื่อดูยอดขายจริงต่อช่องทาง แค่ไม่เอามาคำนวณแต้ม
+
+```
 badges (id, name, condition)
 badges_earned (id, member_id FK, badge_id FK, earned_at)
 missions (id, title, type, reward_point)
