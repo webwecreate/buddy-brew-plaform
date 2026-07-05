@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buddy Brew Member</title>
+<style>
+  body { font-family: sans-serif; text-align: center; padding: 40px 20px; background: #fdf6f3; }
+  img { width: 80px; height: 80px; border-radius: 50%; margin-bottom: 12px; }
+  h1 { color: #B32324; font-size: 20px; }
+  .point { font-size: 32px; font-weight: bold; color: #B32324; }
+  .status { color: #666; margin-top: 20px; }
+</style>
+</head>
+<body>
+  <div id="app">
+    <p class="status">กำลังโหลด...</p>
+  </div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    // Fill these in after creating the LIFF app and edge function.
+    const LIFF_ID = "YOUR_LIFF_ID_HERE"; // ยังรอจาก LINE Developers Console
+    const EDGE_FUNCTION_URL = "https://xsokynhtoxktazlomsnx.supabase.co/functions/v1/create-or-get-member";
+    const SUPABASE_ANON_KEY = "sb_publishable_r-BdEYs8q61oSQKv_qJpPw_Xh5BPgRa";
+
+    const app = document.getElementById("app");
+
+    async function main() {
+      await liff.init({ liffId: LIFF_ID });
+
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+
+      const idToken = liff.getIDToken();
+
+      const res = await fetch(EDGE_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+          "apikey": SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!res.ok) {
+        app.innerHTML = "<p class='status'>เข้าสู่ระบบไม่สำเร็จ ลองใหม่อีกครั้ง</p>";
+        return;
+      }
+
+      const { member, isNew } = await res.json();
+
+      app.innerHTML = `
+        <img src="${member.picture_url ?? ""}" alt="">
+        <h1>สวัสดี ${member.display_name}</h1>
+        <p class="point">${member.point} แต้ม</p>
+        <p class="status">${isNew ? "ยินดีต้อนรับสมาชิกใหม่ของ Buddy Brew!" : "Tier: " + member.tier}</p>
+      `;
+    }
+
+    main().catch((err) => {
+      app.innerHTML = "<p class='status'>เกิดข้อผิดพลาด: " + err.message + "</p>";
+    });
+  </script>
+</body>
+</html>
