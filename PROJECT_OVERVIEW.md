@@ -168,6 +168,8 @@ coupons (id, member_id FK, reward_id FK, code, status, expires_at)
 referrals (id, referrer_id FK, referred_id FK, created_at)
 order_claim_tokens (id, token, channel, point_value, status, claimed_by, claimed_at, expires_at)
   -- สำหรับเคส delivery (Grab/LINEMAN) ดูข้อ 7
+promotions (id, title, description, tag, start_at, end_at, active)
+  -- สำหรับแท็บ "โปรโมชั่น" ใน Buddy Book ให้ Admin จัดการได้เอง ไม่ต้องแก้โค้ด
 ```
 
 ---
@@ -241,13 +243,14 @@ order_claim_tokens (id, token, channel, point_value, status, claimed_by, claimed
 
 กติกาสำคัญ: ฟิลด์ `staff_photo_url`/`staff_note` ต้องกรองออกตั้งแต่ระดับ REST endpoint ไม่ใช่แค่ซ่อนที่หน้าจอ ปรับสิทธิ์นี้ทีหลังได้เสมอเพราะเช็ค role ที่ชั้น API ไม่ได้ฝังตายตัว
 
-**Buddy Book — โครงหน้าจอ (wireframe อยู่ในแชท)**
-- โปรไฟล์ + Tier badge + **ไอคอน QR เล็กมุมบนขวา** (minimal, สำรองไว้ใช้ในอนาคต ไม่ใช่ flow หลักในการเก็บแต้มแล้ว เพราะตอนนี้ลูกค้าสแกนพนักงานแทน)
-- แต้มสะสม + progress bar ไป Tier ถัดไป
-- Badge ของฉัน (โชว์แค่ 3 ที่ปลดแล้วในหน้าแรก) + ปุ่ม **"ดูทั้งหมด"** เปิดหน้าแยกโชว์ badge ครบทุกอันทั้งที่ปลดแล้ว/ยังไม่ปลด พร้อมเงื่อนไขการปลด (กระตุ้นให้อยากสะสมต่อ)
-- คูปองที่ถืออยู่
-- ประวัติการซื้อล่าสุด
-- แบนเนอร์ชวนกรอกวันเกิด (ตรงกับ gap ที่เจอไว้ก่อนหน้า)
+**Buddy Book — โครงสร้างแอป (wireframe อยู่ในแชท)**
+
+Bottom tab bar 3 แท็บ: **สมาชิก / โปรโมชั่น / ติดต่อ**
+
+- **แท็บสมาชิก** (default) — โปรไฟล์ + Tier badge (แตะเปิดหน้า Tier benefits) + **ไอคอน QR เล็กมุมบนขวา** (minimal, สำรองไว้ใช้ในอนาคต ไม่ใช่ flow หลักในการเก็บแต้มแล้ว เพราะตอนนี้ลูกค้าสแกนพนักงานแทน) + แต้มสะสม/progress bar + Badge (โชว์ 3 ที่ปลดแล้ว + ปุ่ม "ดูทั้งหมด" เปิดหน้าแยกโชว์ครบทุกอัน) + คูปอง + ประวัติซื้อ + แบนเนอร์ชวนกรอกวันเกิด
+  - **หน้า Tier benefits** (sub-page แตะจาก Tier badge): โชว์ทั้ง 3 Tier (Sip/Drink/Slurpp) พร้อมช่วงแต้มและสิทธิ์ประโยชน์ของแต่ละ Tier ไฮไลต์ Tier ปัจจุบัน — **สิทธิ์ที่ใส่ในไฟล์นี้เป็นตัวอย่างเท่านั้น ยังไม่ fix จริง** (รอการตัดสินใจเรื่อง tier discount ที่ยังค้างอยู่)
+- **แท็บโปรโมชั่น** — การ์ดโปรประจำเดือน/รายสัปดาห์ (เนื้อหาตัวอย่าง ยังไม่ผูกกับตารางจริง — ถ้าต้องการจัดการผ่าน Admin ต้องเพิ่มตาราง `promotions` ใน Phase 2)
+- **แท็บติดต่อ** — เวลาเปิด-ปิด, ที่อยู่, เบอร์โทร, ปุ่มแชท LINE OA
 
 ---
 
