@@ -1,6 +1,7 @@
 # Buddy Brew Member Platform — Project Overview
 
-สรุปรวมทุกอย่างที่ตัดสินใจไว้ในการวางแผนระบบสมาชิก ใช้เป็น backup อ้างอิง ไม่ต้องไล่อ่านแชทเก่าซ้ำ
+สรุปรวมทุกอย่างที่ตัดสินใจไว้ในการวางแผน+ลงมือสร้างระบบสมาชิก **เป็น single source of truth**
+ถ้าเปิดแชทใหม่ (context เต็ม หรือแยก session) ให้อ่านไฟล์นี้ก่อนเสมอ ไม่ต้องไล่อ่านแชทเก่า
 
 ---
 
@@ -16,21 +17,40 @@
 | ส่วน | ใช้อะไร | เหตุผล |
 |---|---|---|
 | ช่องทางลูกค้า | LINE OA + LIFF | ลูกค้าไม่ต้องลงแอปใหม่ ใช้ LINE ที่มีอยู่แล้ว |
-| Backend | Supabase (Postgres + Data API + Edge Functions) | ตั้งค่าเร็ว หน้าตา Table Editor คล้ายสเปรดชีตที่คุ้นเคยอยู่แล้ว ไม่ต้องเขียน backend เองทั้งหมดแบบ WordPress plugin |
-| Staff Panel / Admin Dashboard | เว็บ (ไม่ใช่แอป) | เปิดจากมือถือ/โน้ตบุ๊คได้ทันที ไม่ต้องผ่าน App Store |
-| ปริ้นเตอร์ (สำหรับเคส delivery) | Wongnai 58IIH (ESC/POS) เครื่องสำรองที่มีอยู่แล้ว ผูกเป็นเครื่องเฉพาะของ Buddy Brew | ปริ้นเตอร์ Bluetooth ที่ต่อกับ GrabMerchant แชร์กับระบบอื่นพร้อมกันไม่ได้ (Bluetooth Classic ต่อได้ทีละอุปกรณ์) |
-| Hosting หน้า LIFF | GitHub repo + GitHub Pages (โฟลเดอร์ `/docs`) | คุณมี GitHub อยู่แล้ว แก้โค้ด → commit → push แล้ว deploy อัตโนมัติ ไม่ต้องลากไฟล์อัปโหลดเองทุกครั้ง |
+| Backend | Supabase (Postgres + Data API + Edge Functions) | หน้าตา Table Editor คล้ายสเปรดชีตที่คุ้นเคย ไม่ต้องเขียน backend เองทั้งหมดแบบ WordPress plugin |
+| Hosting หน้า LIFF | GitHub repo (public) + GitHub Pages (โฟลเดอร์ `/docs`) | แก้โค้ด → commit → push → deploy อัตโนมัติ |
+| Staff Panel / Admin Dashboard | เว็บธรรมดา (Option A — ไม่ใช่ LIFF) | เร็วกว่า ไม่ต้องทำ LINE ID allowlist — ดูข้อ 6 |
+| ปริ้นเตอร์ (เคส delivery) | Wongnai 58IIH (ESC/POS) เครื่องสำรองที่มีอยู่แล้ว ผูกเฉพาะ Buddy Brew | ปริ้นเตอร์ Bluetooth ที่ต่อ GrabMerchant แชร์กับระบบอื่นพร้อมกันไม่ได้ |
 
 ---
 
-## 3. Architecture
+## 3. Account / ID ทั้งหมด (ของจริง ใช้อ้างอิงตรงๆ)
+
+| อะไร | ค่า |
+|---|---|
+| Supabase Project URL | `https://xsokynhtoxktazlomsnx.supabase.co` |
+| Supabase Project ref | `xsokynhtoxktazlomsnx` |
+| Supabase region | Singapore |
+| Supabase publishable key | `sb_publishable_r-BdEYs8q61oSQKv_qJpPw_Xh5BPgRa` (ปลอดภัยเปิดเผยได้ ถูกออกแบบมาให้ public) |
+| LINE Provider | Buddy Brew |
+| LINE Messaging API channel | "Buddy Brew" — Channel ID `2010607210` (ผูกกับ OA ตัวจริงที่มีลูกค้าอยู่) |
+| LINE Login channel | "Buddy Brew Member" — Channel ID `2010607478` (ใช้เป็น `LIFF_CHANNEL_ID` secret) |
+| LIFF app (Customer) | "Buddy Book" — LIFF ID `2010607478-4ZyARdyI` |
+| GitHub repo | `https://github.com/webwecreate/buddy-brew-plaform` (Public) |
+| GitHub Pages URL | `https://webwecreate.github.io/buddy-brew-plaform/` |
+
+**ห้ามใส่ในไฟล์นี้/ในโค้ด**: service_role key / secret key ของ Supabase — เก็บเป็น Edge Function secret เท่านั้น ไม่ commit ลง git เด็ดขาด
+
+---
+
+## 4. Architecture
 
 ```
 ลูกค้า (LINE App) ──┐                      พนักงาน (POS/แท็บเล็ต) ──┐
                     ▼                                              ▼
         ┌── LINE Platform ──┐                    ┌── Buddy Platform (Supabase) ──┐
         │ LINE OA · Messaging API │──────────────▶│ Data API (auto REST)          │
-        │ LIFF หน้าสมาชิก         │               │ Edge Functions (Reward Engine) │
+        │ LIFF "Buddy Book"       │               │ Edge Functions (Reward Engine) │
         └────────────────────┘                    │ Staff Panel + Admin Dashboard  │
                     │                              └────────────────────────────────┘
                     └──────────────────┬──────────────────────┘
@@ -39,14 +59,34 @@
                          members · points · badges · coupons
 ```
 
-- LIFF page เป็นหน้าเว็บ HTML/JS ธรรมดา เรียก Supabase ผ่าน Edge Function เท่านั้น ไม่แตะตารางตรงๆ
-- Staff Panel และ Admin Dashboard เป็นเว็บเดียวกัน แยกมุมมองตาม role หลัง login (ดูข้อ 6)
+- LIFF page (`docs/index.html`, host บน GitHub Pages) เรียก Supabase ผ่าน Edge Function เท่านั้น ไม่แตะตารางตรงๆ
+- Staff Panel/Admin Dashboard (Phase 2 — ยังไม่ได้สร้าง) เป็นเว็บเดียวกัน แยกมุมมองตาม role หลัง login (ดูข้อ 7)
 
 ---
 
-## 4. Database schema
+## 5. โครงสร้างไฟล์ในโปรเจกต์ (repo `buddy-brew-plaform`)
 
-### `members` (สร้างแล้วใน Phase 1)
+```
+buddy-platform/
+├── PROJECT_OVERVIEW.md              ← ไฟล์นี้
+├── docs/
+│   └── index.html                   ← หน้า LIFF "Buddy Book" (GitHub Pages serve จากตรงนี้)
+└── supabase/
+    ├── config.toml                  ← ผูก project_id ให้ Supabase GitHub Integration รู้จัก repo นี้
+    ├── functions/
+    │   └── create-or-get-member/
+    │       └── index.ts             ← Edge Function เดียวที่แตะตาราง members ได้
+    └── migrations/
+        └── 20260705000000_init_members.sql
+```
+
+โครงสร้างนี้จงใจให้ตรงกับ Supabase CLI convention (`supabase/functions/`, `supabase/migrations/`) เพื่อให้ **Supabase GitHub Integration** (Project Settings → Integrations → GitHub) deploy migration + edge function ให้อัตโนมัติทุกครั้งที่ push — ไม่ต้อง copy-paste เข้า dashboard เองอีกต่อไป (สถานะการเชื่อมต่อ ดูข้อ 9)
+
+---
+
+## 6. Database schema
+
+### `members` (สร้างแล้ว ใช้งานจริงใน Phase 1)
 
 ```sql
 create table members (
@@ -61,7 +101,7 @@ create table members (
   staff_note text,                         -- จำหน้า-นิสัย-ชื่อเล่น เห็นเฉพาะ staff/admin
   created_at timestamptz not null default now()
 );
-alter table members enable row level security;  -- ไม่มี policy = เข้าได้แค่ทาง edge function เท่านั้น
+alter table members enable row level security;  -- ไม่มี policy = เข้าได้แค่ทาง edge function (service role) เท่านั้น
 ```
 
 ### ตารางที่จะเพิ่มใน Phase 2
@@ -76,17 +116,17 @@ rewards (id, name, point_cost)
 coupons (id, member_id FK, reward_id FK, code, status, expires_at)
 referrals (id, referrer_id FK, referred_id FK, created_at)
 order_claim_tokens (id, token, channel, point_value, status, claimed_by, claimed_at, expires_at)
-  -- สำหรับเคส delivery (Grab/LINEMAN) ดูข้อ 5
+  -- สำหรับเคส delivery (Grab/LINEMAN) ดูข้อ 7
 ```
 
 ---
 
-## 5. Flow หลัก
+## 7. Flow หลัก
 
 **User flow (สะสมแต้มหน้าร้าน)**
 1. ลูกค้าชำระเงินที่ POS Wongnai ตามปกติ (ไม่แตะต้อง POS)
-2. ลูกค้าเปิด LINE แสดง QR สมาชิกจาก LIFF
-3. พนักงานสแกน QR ด้วยมือถือ (Staff Scanner แบบเว็บ)
+2. ลูกค้าเปิด LINE แสดง QR สมาชิกจาก LIFF "Buddy Book"
+3. พนักงานสแกน QR ด้วยมือถือ (Staff Scanner แบบเว็บ — Phase 2)
 4. พนักงานกรอกยอด/จำนวนแก้ว กดยืนยัน
 5. ระบบอัปเดตแต้ม + แจ้งเตือนกลับทาง LINE ทันที
 
@@ -95,18 +135,17 @@ order_claim_tokens (id, token, channel, point_value, status, claimed_by, claimed
 2. เปิด Staff Panel → กรอกยอด → ระบบสร้าง QR/รหัส **ใช้ได้ครั้งเดียว** (token สุ่ม ไม่ใช่ static QR)
 3. แปะสติกเกอร์ติดถุง (หรือเขียนรหัส 6 หลักด้วยมือถ้ายังไม่มีระบบปริ้นอัตโนมัติ)
 4. ลูกค้าได้รับของ สแกน/กรอกรหัส → login LINE (ถ้ายังไม่เคย)
-5. ระบบเช็ค token แบบ atomic (เคลมซ้ำไม่ได้) → เพิ่มแต้มให้บัญชีที่ login อยู่
+5. ระบบเช็ค token แบบ atomic (เคลมซ้ำไม่ได้) → เพิ่มแต้มให้บัญชีที่ login อยู่ (ระบบรู้ว่าเป็นใครจาก LINE login ตอนเคลม ไม่ใช่จากตัว QR)
 6. ข้อจำกัดที่ต้องยอมรับ: adoption ต่ำกว่าหน้าร้านเพราะต้องพึ่งลูกค้าเปิดแอปมาเคลมเอง ไม่ใช่ 100%
 
-**Admin/Staff access — ตัดสินใจแล้ว: Option A (เว็บธรรมดา)**
-- เข้า URL หลังบ้านเดียวกันจากเบราว์เซอร์ (มือถือ/โน้ตบุ๊ค) ไม่ใช่แอป ไม่ใช่ LIFF กด "เพิ่มลงหน้าจอโฮม" ให้หน้าตาเหมือนแอปได้
+**Admin/Staff access — ตัดสินใจแล้ว: Option A (เว็บธรรมดา ไม่ใช่ LIFF)**
+- เข้า URL หลังบ้านเดียวกันจากเบราว์เซอร์ (มือถือ/โน้ตบุ๊ค) กด "เพิ่มลงหน้าจอโฮม" ให้หน้าตาเหมือนแอปได้
 - Login ด้วย email+รหัสผ่านของ Supabase เอง ไม่ผูกกับ LINE account ส่วนตัวของพนักงาน
-- เหตุผล: เร็วกว่า ไม่ต้องสร้าง allowlist LINE user ID + ไม่ต้องสร้าง LIFF channel เพิ่มอีก 2 ตัว (พิจารณา migrate เป็น LIFF ทีหลังได้ ตาม option B ใน ci-guide ถ้าต้องการ)
-- Login แล้วแยกมุมมองตาม role อัตโนมัติ
+- เหตุผล: เร็วกว่า ไม่ต้องสร้าง allowlist LINE user ID + ไม่ต้องสร้าง LIFF channel เพิ่มอีก 2 ตัว (เปลี่ยนไปทาง LIFF ทีหลังได้ ตาม ci-guide ถ้าต้องการ)
 
 ---
 
-## 6. Role & Permissions
+## 8. Role & Permissions
 
 | ข้อมูล | ลูกค้า (LIFF) | พนักงาน (Staff Panel) | เจ้าของ (Admin Dashboard) |
 |---|---|---|---|
@@ -114,49 +153,44 @@ order_claim_tokens (id, token, channel, point_value, status, claimed_by, claimed
 | รูป+โน้ตจำลูกค้า (staff_photo_url, staff_note) | **ไม่เห็นเด็ดขาด** | เห็นเต็ม | เห็นเต็ม |
 | ตั้งค่า mission/badge/รายงาน | ไม่เห็น | ไม่เห็น | เห็น |
 
-กติกาสำคัญ: ฟิลด์ `staff_photo_url`/`staff_note` ต้องกรองออกตั้งแต่ระดับ REST endpoint (endpoint ที่ลูกค้าเรียกจาก LIFF ไม่ส่งสองฟิลด์นี้กลับมาเลย) ไม่ใช่แค่ซ่อนที่หน้าจอ
-
-ปรับสิทธิ์นี้ทีหลังได้เสมอ (เช่น เพิ่ม role "ผู้จัดการ") เพราะเช็ค role ที่ชั้น API ไม่ได้ฝังตายตัวในโครงสร้าง
+กติกาสำคัญ: ฟิลด์ `staff_photo_url`/`staff_note` ต้องกรองออกตั้งแต่ระดับ REST endpoint ไม่ใช่แค่ซ่อนที่หน้าจอ ปรับสิทธิ์นี้ทีหลังได้เสมอเพราะเช็ค role ที่ชั้น API ไม่ได้ฝังตายตัว
 
 ---
 
-## 7. Brand / Design guideline
+## 9. สถานะปัจจุบัน
 
-- **สีหลัก**: แดง `#B32324` — ใช้เป็น accent (ปุ่ม, progress bar, Tier badge) บนพื้นขาว/ครีม
-- **โลโก้/มาสคอต**: เส้น hand-drawn สีแดงล้วน ตัวการ์ตูนคู่บัดดี้หน้ายิ้ม ไฟล์ต้นทางอยู่ที่ `Artwork/transparent-logo.png` (ไม่มีตัวหนังสือ) และ `Artwork/buddy-brew-logo.svg` (เต็มพร้อมชื่อร้าน)
-- **Tone**: เป็นกันเอง เหมือนเพื่อนคุย ไม่เป็นทางการ (เช่น "เหลืออีก 20 แต้มถึง Slurpp Tier แล้วนะ")
-- **Tier ที่ใช้จริง**: Sip / Drink / Slurpp (ไม่ใช่ Bronze/Silver/Gold — อันนั้นเป็นแค่ demo graphic เดิม)
-- **Channel icon (LINE Login channel / LIFF)**: มีระบบพร้อมแล้วใน `Artwork/ci-guide.png` — ใช้แบบที่ 1 (Badge มุมขวาบน) โลโก้หลัก + badge สีเขียวสำหรับ LIFF (Customer)
-- **Naming convention (จาก ci-guide)**:
-  - Provider: Buddy Brew
-  - Messaging API channel: Buddy Brew Messaging
-  - LINE Login channel: Buddy Brew Member
-  - LIFF app (Customer): **Buddy Book** ← ใช้ชื่อนี้ตอนสร้าง LIFF app (เลือกแทน Buddy Passport เพราะโทนอบอุ่นกว่า เข้ากับมาสคอต)
-  - (Staff/Admin ไม่ใช้ LIFF แล้วตามการตัดสินใจ Option A — ชื่อ Buddy Staff/Buddy Admin ใน ci-guide เก็บสำรองไว้เผื่ออนาคต)
-
----
-
-## 8. สถานะปัจจุบัน (Phase 1)
-
-- [x] ตัดสินใจ tech stack: LINE OA + LIFF + Supabase
-- [x] ออกแบบ schema `members` + ตารางอนาคต
-- [x] สร้าง Supabase project (Singapore region)
-- [x] รัน `schema.sql` สร้างตาราง `members`
-- [x] เขียน Edge Function `create-or-get-member` (verify LINE ID token + upsert)
-- [x] เขียนหน้า LIFF login แรก (`docs/index.html` — ย้ายเข้าโฟลเดอร์ `docs` เพื่อให้ GitHub Pages serve ได้ตรง)
-- [x] Init git repo ในเครื่อง + commit แรก
-- [ ] Push ขึ้น GitHub repo จริง
-- [ ] เปิด GitHub Pages (Settings → Pages → Source: main branch, /docs folder)
-- [x] สร้าง Provider "Buddy Brew" ใน LINE Developers
-- [x] Enable Messaging API บน OA เดิมผ่าน LINE Official Account Manager
-- [x] สร้าง LINE Login channel + LIFF app (เพราะ LINE เปลี่ยนกฎ ต้องสร้างผ่าน LINE Login channel ไม่ใช่ Messaging API channel แล้ว)
-- [ ] เอา LIFF ID มาใส่ในโค้ด
-- [ ] Deploy Edge Function จริง (ตั้งค่า secret `LIFF_CHANNEL_ID`)
-- [ ] หา hosting ให้หน้า LIFF (ต้องมี HTTPS URL จริงถึงจะทดสอบ LIFF ได้เต็มรูปแบบ)
-- [ ] ทดสอบ login ครั้งแรกจริงจากมือถือ
+- [x] Tech stack, schema, architecture, flow ทั้งหมดออกแบบแล้ว (ข้อ 1-8)
+- [x] Supabase project สร้างแล้ว (Singapore) + ตาราง `members` รันสำเร็จ
+- [x] Edge Function `create-or-get-member` เขียน + deploy สำเร็จ (ผ่านหน้า dashboard "Via Editor")
+- [x] LINE: Provider + Messaging API channel (เชื่อมกับ OA เดิม) + LINE Login channel + LIFF app "Buddy Book" สร้างครบ
+- [x] GitHub repo `buddy-brew-plaform` (Public) + GitHub Pages เปิดใช้งานที่ `/docs`
+- [x] Repo จัดโครงสร้างให้ตรง Supabase CLI convention แล้ว (`supabase/functions`, `supabase/migrations`, `supabase/config.toml`)
+- [ ] **เชื่อม Supabase GitHub Integration ให้ auto-deploy จริง** (Project Settings → Integrations → GitHub) — ยังไม่ยืนยันว่าเชื่อมสำเร็จ
+- [ ] ทดสอบ login ผ่าน LIFF จบ end-to-end (เจอ error ระหว่างทาง กำลังไล่แก้ — ดู "ปัญหาที่เจอ" ข้อ 10)
+- [ ] ตกแต่งหน้า Buddy Book ให้ตรง CI (ตอนนี้เป็นเวอร์ชันทดสอบเปล่าๆ)
 
 ## Phase 2 (ยังไม่เริ่ม)
 Tier graphic ใหม่ (Sip/Drink/Slurpp), Staff Panel (สแกน+กรอกแต้ม+อัพรูปลูกค้า), Reward Engine, Badge/Mission, Referral, Delivery QR claim, เชื่อม printer 58IIH
 
 ## Phase 3 (ยังไม่เริ่ม)
 Lucky Wheel, Leaderboard, Seasonal Event, Coffee Passport, Personalized Offer
+
+---
+
+## 10. ปัญหาที่เจอระหว่างทาง (กันแก้ซ้ำ)
+
+1. **LINE เปลี่ยนกฎ**: สร้าง LIFF app ผ่าน Messaging API channel ตรงๆ ไม่ได้แล้ว ต้องสร้างผ่าน **LINE Login channel** แทน
+2. **GitHub Pages ฟรีใช้กับ repo Private ไม่ได้** — ต้องเป็น Public ถึงจะเปิด Pages ฟรีได้ (ตัดสินใจแล้วว่าปลอดภัย เพราะไม่เคย commit secret จริงลง repo)
+3. **Edge Function 500 error** เกิดจาก 2 สาเหตุรวมกัน:
+   - ตาราง `members` ไม่มีอยู่จริง (ลืมรัน migration หลังสร้างโปรเจกต์ใหม่รอบสอง)
+   - `import ... from "https://esm.sh/@supabase/supabase-js@2"` ทำให้ function boot fail แบบเงียบ (log โชว์แค่ "booted" แล้ว "shutdown: EarlyDrop" ไม่มี error จริงโผล่) แก้โดยเปลี่ยนเป็น `import ... from "npm:@supabase/supabase-js@2"` ตาม convention ที่ Supabase แนะนำเอง
+
+---
+
+## 11. Working conventions (วิธีทำงานร่วมกันในโปรเจกต์นี้)
+
+- **Git**: ทุกครั้งที่แก้โค้ด → commit ทันที → **push ทันที** (เคยลืม push มาแล้วครั้งหนึ่ง ห้ามลืมอีก) ถือเป็น backup อัตโนมัติ
+- **Git tag** ที่จุดสำคัญ (เช่น "ทดสอบ login ผ่านครั้งแรก") ไว้ย้อนกลับง่าย
+- **ถ้าเปิดแชทใหม่**: อ่านไฟล์นี้ (`PROJECT_OVERVIEW.md`) ก่อนเสมอ ไม่ต้องไล่ history แชทเก่า
+- **แยกแชทตามเนื้องาน ไม่ใช่ตามโมเดล**: แชทนี้ = engineering/architecture (ต้องคิดลึก ใช้ Sonnet/Opus) ถ้าจะแยกแชทสำหรับ Brand/Design (ทำงานกับ ci-guide, mockup) แยกได้ แต่ไม่จำเป็นต้องแยกเพราะเรื่อง context เต็ม (ระบบสรุปให้อัตโนมัติ)
+- **Backup ข้อมูลจริงในตาราง** (ไม่ใช่แค่โค้ด) ยังไม่ได้ตั้งค่า — Supabase free tier มี backup จำกัด ต้องกลับมาคุยเรื่องนี้ก่อนเปิดใช้จริงกับลูกค้า
