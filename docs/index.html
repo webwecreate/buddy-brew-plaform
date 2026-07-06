@@ -58,7 +58,31 @@
         <h1>สวัสดี ${member.display_name}</h1>
         <p class="point">${member.point} แต้ม</p>
         <p class="status">${isNew ? "ยินดีต้อนรับสมาชิกใหม่ของ Buddy Brew!" : "Tier: " + member.tier}</p>
+        <hr style="margin:24px 0; border:none; border-top:1px solid #ddd;">
+        <p class="status" style="font-size:12px;">[ทดสอบชั่วคราว] วางเทเคลม token</p>
+        <input id="test-token" placeholder="วาง token ที่ได้จาก create-order-token" style="width:80%; padding:8px;">
+        <button id="test-claim" style="margin-top:8px; padding:8px 16px;">ทดสอบเคลม</button>
+        <p id="test-result" class="status"></p>
       `;
+
+      document.getElementById("test-claim").addEventListener("click", async () => {
+        const token = document.getElementById("test-token").value.trim();
+        const resultEl = document.getElementById("test-result");
+        resultEl.textContent = "กำลังเคลม...";
+        const claimRes = await fetch(EDGE_FUNCTION_URL.replace("create-or-get-member", "claim-order-token"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+            "apikey": SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ token, idToken }),
+        });
+        const data = await claimRes.json();
+        resultEl.textContent = claimRes.ok
+          ? `สำเร็จ! ได้ ${data.point_awarded} แต้ม (รวม ${data.new_total})`
+          : `error: ${data.error}`;
+      });
     }
 
     main().catch((err) => {
