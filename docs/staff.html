@@ -36,7 +36,8 @@
 <script>
 const SUPABASE_URL = "https://xsokynhtoxktazlomsnx.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_r-BdEYs8q61oSQKv_qJpPw_Xh5BPgRa";
-const BUDDY_BOOK_URL = "https://webwecreate.github.io/buddy-brew-plaform/";
+const LIFF_ID = "2010607478-4ZyARdyI";
+const LIFF_URL = `https://liff.line.me/${LIFF_ID}`;
 
 const categoryMeta = {
   signature: { icon: 'ti-star', label: 'Signature' },
@@ -146,7 +147,7 @@ async function generateToken(item, bean) {
   }
 
   const { token } = await res.json();
-  const claimUrl = `${BUDDY_BOOK_URL}?token=${token}`;
+  const claimUrl = `${LIFF_URL}?token=${token}`;
   const finalPrice = item.base_price + (bean?.extra_price ?? 0);
 
   summaryEl.innerHTML = `
