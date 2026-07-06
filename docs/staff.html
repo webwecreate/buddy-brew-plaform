@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buddy Brew Staff Panel</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script>
+<style>
+  :root {
+    --surface-2:#ffffff; --surface-1:#F1EFE8; --surface-0:#FAFAF8;
+    --text-primary:#1a1a1a; --text-secondary:#5f5e5a; --text-muted:#888780;
+    --border:#e3e1d8; --border-strong:#cfcdc2; --radius:8px;
+  }
+  body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--surface-0); margin:0; padding: 24px 16px; color: var(--text-primary); }
+  button { padding: 8px 14px; border-radius: 8px; border: 0.5px solid var(--border-strong); background: #fff; cursor:pointer; font-size:14px; color: var(--text-primary); font-family: inherit; }
+  button:hover { background: var(--surface-1); }
+</style>
+</head>
+<body>
+<div id="staff-panel" style="background: var(--surface-2); border-radius: 12px; border: 0.5px solid var(--border); padding: 1.25rem; max-width:420px; margin:0 auto;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+    <div id="crumb" style="font-size: 13px; color: var(--text-secondary); min-height: 18px;"></div>
+    <button id="temp-toggle" style="display:flex; align-items:center; gap:6px; padding: 6px 12px;"></button>
+  </div>
+  <div id="step-title" style="font-weight: 500; font-size: 16px; margin-bottom: 12px;"></div>
+  <div id="grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;"></div>
+  <div id="summary" style="display:none;"></div>
+  <div style="margin-top: 16px;">
+    <button id="back-btn" style="display:none;">
+      <i class="ti ti-arrow-left" style="font-size:16px; vertical-align:-3px; margin-right:4px;"></i>ย้อนกลับ
+    </button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://xsokynhtoxktazlomsnx.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_r-BdEYs8q61oSQKv_qJpPw_Xh5BPgRa";
+const BUDDY_BOOK_URL = "https://webwecreate.github.io/buddy-brew-plaform/";
+
+const categoryMeta = {
+  signature: { icon: 'ti-star', label: 'Signature' },
+  coffee: { icon: 'ti-coffee', label: 'Coffee' },
+  matcha: { icon: 'ti-leaf', label: 'Matcha' },
+  non_coffee: { icon: 'ti-cup', label: 'Non-Coffee' },
+  snack: { icon: 'ti-cookie', label: 'Snack' },
+};
+const categoryOrder = ['signature', 'coffee', 'matcha', 'non_coffee', 'snack'];
+
+let menuItems = [];
+let beanOptions = [];
+let isHot = false;
+let path = [];
+
+const crumbEl = document.getElementById('crumb');
+const titleEl = document.getElementById('step-title');
+const gridEl = document.getElementById('grid');
+const summaryEl = document.getElementById('summary');
+const backBtn = document.getElementById('back-btn');
+const tempToggle = document.getElementById('temp-toggle');
+
+async function loadMenu() {
+  const headers = { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY };
+  const [itemsRes, beansRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/menu_items?select=*&active=eq.true&order=sort_order.asc`, { headers }),
+    fetch(`${SUPABASE_URL}/rest/v1/bean_options?select=*&active=eq.true`, { headers }),
+  ]);
+  menuItems = await itemsRes.json();
+  beanOptions = await beansRes.json();
+  render();
+}
+
+function itemsForCategory(catKey) {
+  return menuItems.filter(m => m.category === catKey && (isHot ? m.available_hot : m.available_cold));
+}
+
+function renderToggle() {
+  tempToggle.innerHTML = isHot
+    ? `<i class="ti ti-flame" style="font-size:16px;"></i><span>ร้อน</span>`
+    : `<i class="ti ti-snowflake" style="font-size:16px;"></i><span>เย็น</span>`;
+}
+
+function render() {
+  crumbEl.textContent = path.map(p => p.label).join(' > ');
+  backBtn.style.display = path.length ? 'inline-block' : 'none';
+  summaryEl.style.display = 'none';
+  gridEl.style.display = 'grid';
+  renderToggle();
+
+  if (path.length === 0) {
+    titleEl.textContent = 'เลือกหมวดเมนู';
+    const visibleCats = categoryOrder.filter(key => key === 'snack' || itemsForCategory(key).length > 0);
+    gridEl.innerHTML = visibleCats.map(key => button(categoryMeta[key].label, `<i class="ti ${categoryMeta[key].icon}" style="font-size:20px;"></i>`, () => {
+      path.push({ key, label: categoryMeta[key].label }); render();
+    })).join('');
+    return;
+  }
+
+  if (path.length === 1) {
+    const items = itemsForCategory(path[0].key);
+    if (items.length === 0) {
+      titleEl.textContent = categoryMeta[path[0].key].label;
+      gridEl.style.display = 'none';
+      summaryEl.style.display = 'block';
+      summaryEl.innerHTML = `<p style="font-size:13px; color:var(--text-muted); text-align:center; padding: 1rem 0;">ยังไม่มีข้อมูลเมนูหมวดนี้</p>`;
+      return;
+    }
+    titleEl.textContent = 'เลือกเมนู';
+    gridEl.innerHTML = items.map(item => button(item.name, `<span style="font-size:12px; color: var(--text-secondary);">${item.base_price} บาท</span>`, () => {
+      path.push({ key: item.id, label: item.name, item }); render();
+    })).join('');
+    return;
+  }
+
+  const chosenItem = path[1].item;
+  if (chosenItem.has_bean_choice && path.length === 2) {
+    titleEl.textContent = 'เลือกเมล็ด';
+    gridEl.innerHTML = beanOptions.map(b => button(b.name, `<span style="font-size:12px; color: var(--text-secondary);">${b.extra_price > 0 ? '+' + b.extra_price + ' บาท' : 'ไม่บวกเพิ่ม'}</span>`, () => {
+      path.push({ key: b.id, label: b.name, bean: b }); render();
+    })).join('');
+    return;
+  }
+
+  generateToken(chosenItem, path.find(p => p.bean)?.bean ?? null);
+}
+
+async function generateToken(item, bean) {
+  gridEl.style.display = 'none';
+  titleEl.textContent = '';
+  summaryEl.style.display = 'block';
+  summaryEl.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:13px; padding:2rem 0;">กำลังสร้าง QR...</p>`;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-order-token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + SUPABASE_ANON_KEY,
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ menu_item_id: item.id, bean_option_id: bean?.id ?? null, channel: "in_store" }),
+  });
+
+  if (!res.ok) {
+    summaryEl.innerHTML = `<p style="text-align:center; color:#A32D2D; font-size:13px; padding:2rem 0;">สร้าง QR ไม่สำเร็จ ลองใหม่อีกครั้ง</p>`;
+    return;
+  }
+
+  const { token } = await res.json();
+  const claimUrl = `${BUDDY_BOOK_URL}?token=${token}`;
+  const finalPrice = item.base_price + (bean?.extra_price ?? 0);
+
+  summaryEl.innerHTML = `
+    <div style="text-align:center; padding: 1rem 0;">
+      <p style="font-weight:500; font-size:16px; margin:0 0 4px;">${isHot ? 'ร้อน' : 'เย็น'} · ${item.name}</p>
+      <p style="font-size:13px; color:var(--text-secondary); margin:0 0 16px;">${bean ? bean.name + ' · ' : ''}${finalPrice} บาท · ${item.point_value} แต้ม</p>
+      <canvas id="qr-canvas" style="margin:0 auto 12px; display:block;"></canvas>
+      <p style="font-size:12px; color:var(--text-muted); margin:0;">ให้ลูกค้าสแกน QR นี้ (ใช้ได้ครั้งเดียว หมดอายุใน 10 นาที)</p>
+      <button id="new-order" style="margin-top:16px;">ออเดอร์ถัดไป</button>
+    </div>
+  `;
+  QRCode.toCanvas(document.getElementById("qr-canvas"), claimUrl, { width: 180 });
+  document.getElementById("new-order").addEventListener("click", () => { path = []; render(); });
+}
+
+function button(label, sub, onclick) {
+  const id = 'btn-' + Math.random().toString(36).slice(2);
+  setTimeout(() => document.getElementById(id)?.addEventListener('click', onclick), 0);
+  return `<button id="${id}" style="height:auto; padding:14px 10px; display:flex; flex-direction:column; align-items:center; gap:6px;">
+    <span>${label}</span>${sub}
+  </button>`;
+}
+
+tempToggle.addEventListener('click', () => { isHot = !isHot; path = []; render(); });
+backBtn.addEventListener('click', () => { path.pop(); render(); });
+
+loadMenu();
+</script>
+</body>
+</html>

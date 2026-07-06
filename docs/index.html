@@ -10,6 +10,7 @@
   h1 { color: #B32324; font-size: 20px; }
   .point { font-size: 32px; font-weight: bold; color: #B32324; }
   .status { color: #666; margin-top: 20px; }
+  .claim-success { color: #3B6D11; font-size: 18px; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -19,12 +20,20 @@
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    // Fill these in after creating the LIFF app and edge function.
     const LIFF_ID = "2010607478-4ZyARdyI";
-    const EDGE_FUNCTION_URL = "https://xsokynhtoxktazlomsnx.supabase.co/functions/v1/create-or-get-member";
+    const SUPABASE_URL = "https://xsokynhtoxktazlomsnx.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_r-BdEYs8q61oSQKv_qJpPw_Xh5BPgRa";
 
     const app = document.getElementById("app");
+
+    function showProfile(member) {
+      app.innerHTML = `
+        <img src="${member.picture_url ?? ""}" alt="">
+        <h1>สวัสดี ${member.display_name}</h1>
+        <p class="point">${member.point} แต้ม</p>
+        <p class="status">Tier: ${member.tier}</p>
+      `;
+    }
 
     async function main() {
       await liff.init({ liffId: LIFF_ID });
@@ -35,14 +44,15 @@
       }
 
       const idToken = liff.getIDToken();
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + SUPABASE_ANON_KEY,
+        apikey: SUPABASE_ANON_KEY,
+      };
 
-      const res = await fetch(EDGE_FUNCTION_URL, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-or-get-member`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-          "apikey": SUPABASE_ANON_KEY,
-        },
+        headers,
         body: JSON.stringify({ idToken }),
       });
 
@@ -51,38 +61,30 @@
         return;
       }
 
-      const { member, isNew } = await res.json();
+      const { member } = await res.json();
 
-      app.innerHTML = `
-        <img src="${member.picture_url ?? ""}" alt="">
-        <h1>สวัสดี ${member.display_name}</h1>
-        <p class="point">${member.point} แต้ม</p>
-        <p class="status">${isNew ? "ยินดีต้อนรับสมาชิกใหม่ของ Buddy Brew!" : "Tier: " + member.tier}</p>
-        <hr style="margin:24px 0; border:none; border-top:1px solid #ddd;">
-        <p class="status" style="font-size:12px;">[ทดสอบชั่วคราว] วางเทเคลม token</p>
-        <input id="test-token" placeholder="วาง token ที่ได้จาก create-order-token" style="width:80%; padding:8px;">
-        <button id="test-claim" style="margin-top:8px; padding:8px 16px;">ทดสอบเคลม</button>
-        <p id="test-result" class="status"></p>
-      `;
-
-      document.getElementById("test-claim").addEventListener("click", async () => {
-        const token = document.getElementById("test-token").value.trim();
-        const resultEl = document.getElementById("test-result");
-        resultEl.textContent = "กำลังเคลม...";
-        const claimRes = await fetch(EDGE_FUNCTION_URL.replace("create-or-get-member", "claim-order-token"), {
+      // ถ้ามาจาก QR สแกน (?token=...) ให้เคลมแต้มอัตโนมัติก่อนโชว์โปรไฟล์
+      const token = new URLSearchParams(window.location.search).get("token");
+      if (token) {
+        app.innerHTML = "<p class='status'>กำลังรับแต้ม...</p>";
+        const claimRes = await fetch(`${SUPABASE_URL}/functions/v1/claim-order-token`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-            "apikey": SUPABASE_ANON_KEY,
-          },
+          headers,
           body: JSON.stringify({ token, idToken }),
         });
-        const data = await claimRes.json();
-        resultEl.textContent = claimRes.ok
-          ? `สำเร็จ! ได้ ${data.point_awarded} แต้ม (รวม ${data.new_total})`
-          : `error: ${data.error}`;
-      });
+        const claimData = await claimRes.json();
+
+        if (claimRes.ok) {
+          app.innerHTML = `<p class="claim-success">+${claimData.point_awarded} แต้ม!</p><p class="status">รวม ${claimData.new_total} แต้ม</p>`;
+          member.point = claimData.new_total;
+        } else {
+          app.innerHTML = `<p class="status">รับแต้มไม่สำเร็จ: ${claimData.error}</p>`;
+        }
+        setTimeout(() => showProfile(member), 3000);
+        return;
+      }
+
+      showProfile(member);
     }
 
     main().catch((err) => {
