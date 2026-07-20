@@ -177,30 +177,72 @@ async function renderMembers() {
   pageEl.innerHTML = `
     <div class="card">
       <input id="member-search" type="text" placeholder="ค้นหาชื่อสมาชิก... (ว่างไว้เพื่อดูทั้งหมด)" style="width:100%; box-sizing:border-box; padding:10px; margin-bottom:12px; border-radius:8px; border:0.5px solid var(--border-strong);">
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button id="sort-fav" type="button">★ รายการโปรด</button>
+        <button id="sort-created" type="button">วันที่สมัคร</button>
+        <button id="sort-name" type="button">ชื่อ</button>
+      </div>
       <div id="member-list" style="font-size:13px; color:var(--text-muted);">กำลังโหลด...</div>
     </div>
   `;
 
   const searchInput = document.getElementById('member-search');
   const listEl = document.getElementById('member-list');
+  const sortBtns = {
+    fav: document.getElementById('sort-fav'),
+    created: document.getElementById('sort-created'),
+    name: document.getElementById('sort-name'),
+  };
+  let memberSort = 'fav'; // default: pin favorites to top regardless of list size
+
+  function sortOrderParam(sort) {
+    if (sort === 'created') return 'created_at.desc';
+    if (sort === 'fav') return 'is_favorite.desc,display_name.asc';
+    return 'display_name.asc';
+  }
 
   async function search(term) {
     const filter = term ? `&display_name=ilike.*${encodeURIComponent(term)}*` : '';
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/members?select=id,display_name,tier,point&order=display_name.asc&limit=50${filter}`, { headers: restHeaders() });
+    const order = sortOrderParam(memberSort);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/members?select=id,display_name,tier,point,is_favorite&order=${order}&limit=50${filter}`, { headers: restHeaders() });
     const rows = await res.json();
     if (!Array.isArray(rows) || rows.length === 0) { listEl.innerHTML = `<p style="color:var(--text-muted);">ไม่พบสมาชิก</p>`; return; }
     listEl.innerHTML = rows.map(m => `
-      <div class="member-row" data-id="${m.id}" style="display:flex; justify-content:space-between; padding:10px 8px; border-bottom:0.5px solid var(--border); cursor:pointer;">
-        <span>${m.display_name}</span>
+      <div class="member-row" data-id="${m.id}" style="display:flex; justify-content:space-between; align-items:center; padding:10px 8px; border-bottom:0.5px solid var(--border); cursor:pointer;">
+        <span style="display:flex; align-items:center; gap:8px;">
+          <i class="ti ${m.is_favorite ? 'ti-star-filled' : 'ti-star'} fav-star" data-id="${m.id}" data-fav="${m.is_favorite}" style="font-size:16px; color:${m.is_favorite ? '#D4A017' : 'var(--text-muted)'};"></i>
+          <span>${m.display_name}</span>
+        </span>
         <span style="color:var(--text-secondary);">${m.tier} · ${m.point} แต้ม</span>
       </div>
     `).join('');
     listEl.querySelectorAll('.member-row').forEach(el => {
       el.addEventListener('click', () => { selectedMember = el.dataset.id; renderPage(); });
     });
+    listEl.querySelectorAll('.fav-star').forEach(starEl => {
+      starEl.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = starEl.dataset.id;
+        const newFav = starEl.dataset.fav !== 'true';
+        await fetch(`${SUPABASE_URL}/rest/v1/members?id=eq.${id}`, {
+          method: "PATCH",
+          headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ is_favorite: newFav }),
+        });
+        search(searchInput.value.trim());
+      });
+    });
   }
 
-  search('');
+  function setSort(sort) {
+    memberSort = sort;
+    Object.entries(sortBtns).forEach(([key, btn]) => { btn.style.background = key === sort ? 'var(--surface-1)' : '#fff'; });
+    search(searchInput.value.trim());
+  }
+  sortBtns.fav.addEventListener('click', () => setSort('fav'));
+  sortBtns.created.addEventListener('click', () => setSort('created'));
+  sortBtns.name.addEventListener('click', () => setSort('name'));
+  setSort(memberSort);
 
   let debounceTimer;
   searchInput.addEventListener('input', () => {
