@@ -210,7 +210,7 @@ async function renderMembers() {
     listEl.innerHTML = rows.map(m => `
       <div class="member-row" data-id="${m.id}" style="display:flex; justify-content:space-between; align-items:center; padding:10px 8px; border-bottom:0.5px solid var(--border); cursor:pointer;">
         <span style="display:flex; align-items:center; gap:8px;">
-          <i class="ti ${m.is_favorite ? 'ti-star-filled' : 'ti-star'} fav-star" data-id="${m.id}" data-fav="${m.is_favorite}" style="font-size:16px; color:${m.is_favorite ? '#D4A017' : 'var(--text-muted)'};"></i>
+          <span class="fav-star" data-id="${m.id}" data-fav="${m.is_favorite}" style="font-size:16px; line-height:1; color:${m.is_favorite ? '#D4A017' : 'var(--text-muted)'};">${m.is_favorite ? '★' : '☆'}</span>
           <span>${m.display_name}</span>
         </span>
         <span style="color:var(--text-secondary);">${m.tier} · ${m.point} แต้ม</span>
@@ -260,7 +260,10 @@ async function renderMemberDetail(memberId) {
   pageEl.innerHTML = `
     <button id="back-to-list" style="margin-bottom:12px;"><i class="ti ti-arrow-left" style="font-size:14px; vertical-align:-2px;"></i> กลับ</button>
     <div class="card" style="margin-bottom:12px;">
-      <div style="font-weight:500; font-size:16px;">${member.display_name}</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span id="detail-fav-star" data-fav="${member.is_favorite}" style="font-size:20px; line-height:1; cursor:pointer; color:${member.is_favorite ? '#D4A017' : 'var(--text-muted)'};">${member.is_favorite ? '★' : '☆'}</span>
+        <div style="font-weight:500; font-size:16px;">${member.display_name}</div>
+      </div>
       <div style="color:var(--text-secondary); font-size:13px; margin-top:4px;">${member.tier} · ${member.point} แต้ม</div>
     </div>
     <div class="card" style="margin-bottom:12px;">
@@ -269,6 +272,14 @@ async function renderMemberDetail(memberId) {
       <input id="photo-file" type="file" accept="image/*" style="display:none;">
       <button id="photo-upload-btn">อัปโหลดรูป</button>
       <span id="photo-status" style="display:none; font-size:13px; margin-left:8px;"></span>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-weight:500; margin-bottom:8px;">แท็ก (จำแนกกลุ่มลูกค้า)</div>
+      <div id="tag-chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;"></div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+        ${['กลุ่ม', 'คู่', 'บอร์ดเกม', 'ซื้อกลับ'].map(t => `<button type="button" class="tag-suggest" data-tag="${t}" style="font-size:12px; padding:5px 10px;">+ ${t}</button>`).join('')}
+      </div>
+      <input id="tag-input" type="text" placeholder="พิมพ์แท็กเอง แล้วกด Enter" style="width:100%; box-sizing:border-box; padding:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
     </div>
     <div class="card" style="margin-bottom:12px;">
       <div style="font-weight:500; margin-bottom:8px;">โน้ต (จำหน้า/นิสัย/ชื่อเล่น)</div>
@@ -290,6 +301,70 @@ async function renderMemberDetail(memberId) {
   `;
 
   document.getElementById('back-to-list').addEventListener('click', () => { selectedMember = null; renderPage(); });
+
+  const favStar = document.getElementById('detail-fav-star');
+  favStar.addEventListener('click', async () => {
+    const newFav = favStar.dataset.fav !== 'true';
+    await fetch(`${SUPABASE_URL}/rest/v1/members?id=eq.${memberId}`, {
+      method: "PATCH",
+      headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ is_favorite: newFav }),
+    });
+    favStar.dataset.fav = String(newFav);
+    favStar.textContent = newFav ? '★' : '☆';
+    favStar.style.color = newFav ? '#D4A017' : 'var(--text-muted)';
+  });
+
+  let currentTags = Array.isArray(member.tags) ? [...member.tags] : [];
+  const tagChipsEl = document.getElementById('tag-chips');
+  const tagInput = document.getElementById('tag-input');
+
+  async function saveTags() {
+    await fetch(`${SUPABASE_URL}/rest/v1/members?id=eq.${memberId}`, {
+      method: "PATCH",
+      headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ tags: currentTags }),
+    });
+  }
+
+  function renderTagChips() {
+    if (currentTags.length === 0) {
+      tagChipsEl.innerHTML = `<span style="color:var(--text-muted); font-size:13px;">ยังไม่มีแท็ก</span>`;
+      return;
+    }
+    tagChipsEl.innerHTML = currentTags.map(t => `
+      <span class="tag-chip" style="display:inline-flex; align-items:center; gap:6px; background:var(--surface-1); border-radius:14px; padding:4px 10px; font-size:13px;">
+        ${t}
+        <span class="tag-remove" data-tag="${t}" style="cursor:pointer; color:var(--text-muted);">×</span>
+      </span>
+    `).join('');
+    tagChipsEl.querySelectorAll('.tag-remove').forEach(el => {
+      el.addEventListener('click', async () => {
+        currentTags = currentTags.filter(t => t !== el.dataset.tag);
+        renderTagChips();
+        await saveTags();
+      });
+    });
+  }
+  renderTagChips();
+
+  async function addTag(tag) {
+    tag = tag.trim();
+    if (!tag || currentTags.includes(tag)) return;
+    currentTags.push(tag);
+    renderTagChips();
+    await saveTags();
+  }
+
+  document.querySelectorAll('.tag-suggest').forEach(btn => {
+    btn.addEventListener('click', () => addTag(btn.dataset.tag));
+  });
+  tagInput.addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    await addTag(tagInput.value);
+    tagInput.value = '';
+  });
 
   function renderPhotoPreview(url) {
     const wrap = document.getElementById('photo-preview-wrap');
