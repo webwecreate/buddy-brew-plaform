@@ -82,10 +82,24 @@
       `).join('');
     }
 
+    // Preview = 3 most-recently-unlocked badges; if fewer than 3 are unlocked, fill the
+    // rest with random locked badges as suggestions (re-shuffled on every visit).
+    function pickBadgePreview(badges) {
+      const earnedRecent = badges
+        .filter(b => b.earned)
+        .sort((a, b) => new Date(b.earned_at) - new Date(a.earned_at))
+        .slice(0, 3);
+      if (earnedRecent.length < 3) {
+        const locked = badges.filter(b => !b.earned).sort(() => Math.random() - 0.5);
+        earnedRecent.push(...locked.slice(0, 3 - earnedRecent.length));
+      }
+      return earnedRecent;
+    }
+
     function renderBadgeRows(badges, showAll) {
-      const list = showAll ? badges : badges.filter(b => b.earned).slice(0, 3);
+      const list = showAll ? badges : pickBadgePreview(badges);
       if (list.length === 0) {
-        return `<p style="color:var(--text-muted); font-size:13px;">${showAll ? 'ยังไม่มีข้อมูล badge' : 'ยังไม่มี badge ที่ปลด'}</p>`;
+        return `<p style="color:var(--text-muted); font-size:13px;">${showAll ? 'ยังไม่มีข้อมูล badge' : 'ยังไม่มี badge ให้แนะนำตอนนี้'}</p>`;
       }
       return list.map(b => `
         <div class="history-row">
