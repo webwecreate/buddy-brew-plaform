@@ -86,11 +86,11 @@ const pageEl = document.getElementById('page-content');
 const pages = [
   { key: 'overview', label: 'Overview', icon: 'ti-layout-dashboard', enabled: true },
   { key: 'members', label: 'สมาชิก', icon: 'ti-users', enabled: true },
-  { key: 'points', label: 'แต้ม', icon: 'ti-coin', enabled: false },
-  { key: 'menu', label: 'เมนู', icon: 'ti-coffee', enabled: false },
-  { key: 'badges', label: 'Badge/Mission', icon: 'ti-award', enabled: false },
-  { key: 'reports', label: 'รายงาน', icon: 'ti-chart-bar', enabled: false },
-  { key: 'staff', label: 'พนักงาน', icon: 'ti-id-badge-2', enabled: false },
+  { key: 'points', label: 'แต้ม', icon: 'ti-coin', enabled: true },
+  { key: 'menu', label: 'เมนู', icon: 'ti-coffee', enabled: true },
+  { key: 'badges', label: 'Badge/Mission', icon: 'ti-award', enabled: true },
+  { key: 'reports', label: 'รายงาน', icon: 'ti-chart-bar', enabled: true },
+  { key: 'staff', label: 'พนักงาน', icon: 'ti-id-badge-2', enabled: true },
 ];
 
 function showLogin() {
@@ -161,6 +161,11 @@ function restHeaders() {
 async function renderPage() {
   if (currentPage === 'overview') return renderOverview();
   if (currentPage === 'members') return renderMembers();
+  if (currentPage === 'points') return renderPoints();
+  if (currentPage === 'menu') return renderMenu();
+  if (currentPage === 'badges') return renderBadgeMission();
+  if (currentPage === 'reports') return renderReports();
+  if (currentPage === 'staff') return renderStaff();
 }
 
 async function renderOverview() {
@@ -475,6 +480,356 @@ async function renderMemberDetail(memberId) {
     msgEl.style.display = 'block';
     setTimeout(() => renderMemberDetail(memberId), 1200);
   });
+}
+
+async function renderPoints() {
+  pageEl.innerHTML = `
+    <div class="card">
+      <input id="points-search" type="text" placeholder="ค้นหาชื่อสมาชิก... (ว่างไว้เพื่อดูทั้งหมด)" style="width:100%; box-sizing:border-box; padding:10px; margin-bottom:12px; border-radius:8px; border:0.5px solid var(--border-strong);">
+      <div id="points-summary" style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">กำลังโหลด...</div>
+      <div id="points-list" style="font-size:13px; color:var(--text-muted);">กำลังโหลด...</div>
+    </div>
+  `;
+
+  const searchInput = document.getElementById('points-search');
+  const summaryEl = document.getElementById('points-summary');
+  const listEl = document.getElementById('points-list');
+
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayIso = todayStart.toISOString();
+  const txTodayRes = await fetch(`${SUPABASE_URL}/rest/v1/points_transactions?select=point_change&created_at=gte.${todayIso}`, { headers: restHeaders() });
+  const txToday = await txTodayRes.json();
+  const awarded = Array.isArray(txToday) ? txToday.filter(t => t.point_change > 0).reduce((s, t) => s + t.point_change, 0) : 0;
+  const deducted = Array.isArray(txToday) ? txToday.filter(t => t.point_change < 0).reduce((s, t) => s + t.point_change, 0) : 0;
+  summaryEl.textContent = `วันนี้: แจก +${awarded} แต้ม / หัก ${deducted} แต้ม`;
+
+  async function search(term) {
+    const filter = term ? `&members.display_name=ilike.*${encodeURIComponent(term)}*` : '';
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/points_transactions?select=point_change,reason,created_at,members(display_name),menu_items(name)&order=created_at.desc&limit=100${filter}`, { headers: restHeaders() });
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) { listEl.innerHTML = `<p style="color:var(--text-muted);">ไม่พบรายการ</p>`; return; }
+    listEl.innerHTML = rows.map(r => `
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:0.5px solid var(--border);">
+        <span>${r.members?.display_name ?? '-'} <span style="color:var(--text-muted); font-size:12px;">· ${r.menu_items?.name ?? r.reason ?? 'ปรับแต้ม'}</span></span>
+        <span style="color:${r.point_change >= 0 ? '#2D7A3D' : '#A32D2D'};">${r.point_change >= 0 ? '+' : ''}${r.point_change}</span>
+      </div>
+    `).join('');
+  }
+
+  search('');
+  let debounceTimer;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => search(searchInput.value.trim()), 300);
+  });
+}
+
+async function renderMenu() {
+  pageEl.innerHTML = `<p style="color:var(--text-muted); font-size:13px;">กำลังโหลด...</p>`;
+  const [itemsRes, beansRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/menu_items?select=*&order=category.asc,sort_order.asc`, { headers: restHeaders() }),
+    fetch(`${SUPABASE_URL}/rest/v1/bean_options?select=*&order=name.asc`, { headers: restHeaders() }),
+  ]);
+  const items = await itemsRes.json();
+  const beans = await beansRes.json();
+
+  pageEl.innerHTML = `
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-weight:600; margin-bottom:8px;">เมนู</div>
+      <div id="menu-list"></div>
+      <button id="add-menu-btn" type="button" style="margin-top:8px;">+ เพิ่มเมนูใหม่</button>
+      <div id="add-menu-form" style="display:none; margin-top:12px; border-top:0.5px solid var(--border); padding-top:12px;">
+        <input id="new-menu-name" type="text" placeholder="ชื่อเมนู" style="width:100%; box-sizing:border-box; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+        <select id="new-menu-category" style="width:100%; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+          <option value="signature">Signature</option>
+          <option value="coffee">Coffee</option>
+          <option value="matcha">Matcha</option>
+          <option value="non_coffee">Non-Coffee</option>
+          <option value="snack">Snack</option>
+        </select>
+        <input id="new-menu-price" type="number" placeholder="ราคา" style="width:100%; box-sizing:border-box; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+        <input id="new-menu-point" type="number" placeholder="แต้ม" value="5" style="width:100%; box-sizing:border-box; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+        <label style="font-size:13px; margin-right:12px;"><input id="new-menu-hot" type="checkbox"> ร้อน</label>
+        <label style="font-size:13px;"><input id="new-menu-cold" type="checkbox" checked> เย็น</label>
+        <div style="margin-top:8px;"><button id="submit-new-menu" type="button">บันทึกเมนูใหม่</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:8px;">ตัวเลือกเมล็ด</div>
+      <div id="bean-list"></div>
+      <button id="add-bean-btn" type="button" style="margin-top:8px;">+ เพิ่มตัวเลือกเมล็ด</button>
+      <div id="add-bean-form" style="display:none; margin-top:12px; border-top:0.5px solid var(--border); padding-top:12px;">
+        <input id="new-bean-name" type="text" placeholder="ชื่อเมล็ด" style="width:100%; box-sizing:border-box; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+        <input id="new-bean-price" type="number" placeholder="ราคาเพิ่ม" value="0" style="width:100%; box-sizing:border-box; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+        <button id="submit-new-bean" type="button">บันทึกเมล็ดใหม่</button>
+      </div>
+    </div>
+  `;
+
+  const menuListEl = document.getElementById('menu-list');
+  menuListEl.innerHTML = items.map(item => `
+    <div data-id="${item.id}" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 0; border-bottom:0.5px solid var(--border); font-size:13px;">
+      <span style="flex:1; min-width:120px; font-weight:500;">${item.name} <span style="color:var(--text-muted); font-size:11px;">(${item.category})</span></span>
+      <input class="menu-price" type="number" value="${item.base_price}" style="width:70px; padding:6px; border-radius:6px; border:0.5px solid var(--border-strong);">
+      <input class="menu-point" type="number" value="${item.point_value}" style="width:60px; padding:6px; border-radius:6px; border:0.5px solid var(--border-strong);">
+      <label><input class="menu-hot" type="checkbox" ${item.available_hot ? 'checked' : ''}> ร้อน</label>
+      <label><input class="menu-cold" type="checkbox" ${item.available_cold ? 'checked' : ''}> เย็น</label>
+      <label><input class="menu-active" type="checkbox" ${item.active ? 'checked' : ''}> เปิดขาย</label>
+      <button class="menu-save" type="button">บันทึก</button>
+    </div>
+  `).join('');
+  menuListEl.querySelectorAll('[data-id]').forEach(row => {
+    row.querySelector('.menu-save').addEventListener('click', async () => {
+      const id = row.dataset.id;
+      const body = {
+        base_price: parseFloat(row.querySelector('.menu-price').value),
+        point_value: parseInt(row.querySelector('.menu-point').value, 10),
+        available_hot: row.querySelector('.menu-hot').checked,
+        available_cold: row.querySelector('.menu-cold').checked,
+        active: row.querySelector('.menu-active').checked,
+      };
+      await fetch(`${SUPABASE_URL}/rest/v1/menu_items?id=eq.${id}`, {
+        method: "PATCH",
+        headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify(body),
+      });
+      const saveBtn = row.querySelector('.menu-save');
+      saveBtn.textContent = 'บันทึกแล้ว';
+      setTimeout(() => { saveBtn.textContent = 'บันทึก'; }, 1500);
+    });
+  });
+
+  document.getElementById('add-menu-btn').addEventListener('click', () => {
+    document.getElementById('add-menu-form').style.display = 'block';
+  });
+  document.getElementById('submit-new-menu').addEventListener('click', async () => {
+    const name = document.getElementById('new-menu-name').value.trim();
+    const category = document.getElementById('new-menu-category').value;
+    const base_price = parseFloat(document.getElementById('new-menu-price').value);
+    const point_value = parseInt(document.getElementById('new-menu-point').value, 10) || 5;
+    const available_hot = document.getElementById('new-menu-hot').checked;
+    const available_cold = document.getElementById('new-menu-cold').checked;
+    if (!name || !base_price) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/menu_items`, {
+      method: "POST",
+      headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ name, category, base_price, point_value, available_hot, available_cold, active: true }),
+    });
+    renderMenu();
+  });
+
+  const beanListEl = document.getElementById('bean-list');
+  beanListEl.innerHTML = beans.map(b => `
+    <div data-id="${b.id}" style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:0.5px solid var(--border); font-size:13px;">
+      <span style="flex:1;">${b.name}</span>
+      <input class="bean-price" type="number" value="${b.extra_price}" style="width:70px; padding:6px; border-radius:6px; border:0.5px solid var(--border-strong);">
+      <button class="bean-save" type="button">บันทึก</button>
+    </div>
+  `).join('');
+  beanListEl.querySelectorAll('[data-id]').forEach(row => {
+    row.querySelector('.bean-save').addEventListener('click', async () => {
+      const id = row.dataset.id;
+      const extra_price = parseFloat(row.querySelector('.bean-price').value);
+      await fetch(`${SUPABASE_URL}/rest/v1/bean_options?id=eq.${id}`, {
+        method: "PATCH",
+        headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ extra_price }),
+      });
+      const saveBtn = row.querySelector('.bean-save');
+      saveBtn.textContent = 'บันทึกแล้ว';
+      setTimeout(() => { saveBtn.textContent = 'บันทึก'; }, 1500);
+    });
+  });
+
+  document.getElementById('add-bean-btn').addEventListener('click', () => {
+    document.getElementById('add-bean-form').style.display = 'block';
+  });
+  document.getElementById('submit-new-bean').addEventListener('click', async () => {
+    const name = document.getElementById('new-bean-name').value.trim();
+    const extra_price = parseFloat(document.getElementById('new-bean-price').value) || 0;
+    if (!name) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/bean_options`, {
+      method: "POST",
+      headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ name, extra_price, active: true }),
+    });
+    renderMenu();
+  });
+}
+
+async function renderBadgeMission() {
+  pageEl.innerHTML = `<p style="color:var(--text-muted); font-size:13px;">กำลังโหลด...</p>`;
+  const [badgesRes, missionsRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/badges?select=*&order=name.asc`, { headers: restHeaders() }),
+    fetch(`${SUPABASE_URL}/rest/v1/missions?select=*&order=title.asc`, { headers: restHeaders() }),
+  ]);
+  const badges = await badgesRes.json();
+  const missions = await missionsRes.json();
+
+  pageEl.innerHTML = `
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-weight:600; margin-bottom:8px;">Badge</div>
+      <div id="badge-list"></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:8px;">Mission</div>
+      <div id="mission-list"></div>
+      <button id="add-mission-btn" type="button" style="margin-top:8px;">+ เพิ่ม Mission ใหม่</button>
+      <div id="add-mission-form" style="display:none; margin-top:12px; border-top:0.5px solid var(--border); padding-top:12px;">
+        <input id="new-mission-title" type="text" placeholder="ชื่อ Mission" style="width:100%; box-sizing:border-box; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+        <select id="new-mission-type" style="width:100%; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+          <option value="daily">รายวัน</option>
+          <option value="weekly">รายสัปดาห์</option>
+        </select>
+        <input id="new-mission-target" type="number" placeholder="จำนวนแก้วที่ต้องซื้อ" value="1" min="1" style="width:100%; box-sizing:border-box; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+        <input id="new-mission-reward" type="number" placeholder="แต้มรางวัล" value="10" style="width:100%; box-sizing:border-box; padding:8px; margin-bottom:8px; border-radius:8px; border:0.5px solid var(--border-strong);">
+        <button id="submit-new-mission" type="button">บันทึก Mission ใหม่</button>
+      </div>
+    </div>
+  `;
+
+  const badgeListEl = document.getElementById('badge-list');
+  badgeListEl.innerHTML = badges.map(b => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:0.5px solid var(--border); font-size:13px;">
+      <span><i class="ti ${b.icon}" style="margin-right:6px;"></i>${b.name} <span style="color:var(--text-muted); font-size:11px;">— ${b.condition}</span></span>
+      <label><input class="badge-toggle" data-id="${b.id}" type="checkbox" ${b.active ? 'checked' : ''}> เปิดใช้</label>
+    </div>
+  `).join('');
+  badgeListEl.querySelectorAll('.badge-toggle').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      await fetch(`${SUPABASE_URL}/rest/v1/badges?id=eq.${cb.dataset.id}`, {
+        method: "PATCH",
+        headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ active: cb.checked }),
+      });
+    });
+  });
+
+  const missionListEl = document.getElementById('mission-list');
+  if (missions.length === 0) {
+    missionListEl.innerHTML = `<p style="color:var(--text-muted); font-size:13px;">ยังไม่มี mission</p>`;
+  } else {
+    missionListEl.innerHTML = missions.map(m => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:0.5px solid var(--border); font-size:13px;">
+        <span>${m.title} <span style="color:var(--text-muted); font-size:11px;">(${m.type === 'daily' ? 'รายวัน' : 'รายสัปดาห์'} · ซื้อ ${m.target_count} แก้ว · ${m.reward_point} แต้ม)</span></span>
+        <label><input class="mission-toggle" data-id="${m.id}" type="checkbox" ${m.active ? 'checked' : ''}> เปิดใช้</label>
+      </div>
+    `).join('');
+    missionListEl.querySelectorAll('.mission-toggle').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        await fetch(`${SUPABASE_URL}/rest/v1/missions?id=eq.${cb.dataset.id}`, {
+          method: "PATCH",
+          headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ active: cb.checked }),
+        });
+      });
+    });
+  }
+
+  document.getElementById('add-mission-btn').addEventListener('click', () => {
+    document.getElementById('add-mission-form').style.display = 'block';
+  });
+  document.getElementById('submit-new-mission').addEventListener('click', async () => {
+    const title = document.getElementById('new-mission-title').value.trim();
+    const type = document.getElementById('new-mission-type').value;
+    const target_count = parseInt(document.getElementById('new-mission-target').value, 10) || 1;
+    const reward_point = parseInt(document.getElementById('new-mission-reward').value, 10) || 0;
+    if (!title) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/missions`, {
+      method: "POST",
+      headers: { ...restHeaders(), "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ title, type, target_count, reward_point, active: true }),
+    });
+    renderBadgeMission();
+  });
+}
+
+async function renderReports() {
+  pageEl.innerHTML = `<p style="color:var(--text-muted); font-size:13px;">กำลังโหลด...</p>`;
+  const [txRes, membersRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/points_transactions?select=menu_items(name)&menu_item_id=not.is.null&limit=2000`, { headers: restHeaders() }),
+    fetch(`${SUPABASE_URL}/rest/v1/members?select=tier,created_at`, { headers: restHeaders() }),
+  ]);
+  const tx = await txRes.json();
+  const members = await membersRes.json();
+
+  const salesCount = {};
+  (Array.isArray(tx) ? tx : []).forEach(t => {
+    const name = t.menu_items?.name ?? 'ไม่ทราบเมนู';
+    salesCount[name] = (salesCount[name] || 0) + 1;
+  });
+  const salesRows = Object.entries(salesCount).sort((a, b) => b[1] - a[1]);
+
+  const tierCount = { sip: 0, drink: 0, slurpp: 0 };
+  (Array.isArray(members) ? members : []).forEach(m => { tierCount[m.tier] = (tierCount[m.tier] || 0) + 1; });
+
+  const weekBuckets = {};
+  const now = new Date();
+  for (let i = 0; i < 8; i++) {
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay() - (i * 7));
+    weekStart.setHours(0, 0, 0, 0);
+    weekBuckets[weekStart.toISOString().slice(0, 10)] = 0;
+  }
+  (Array.isArray(members) ? members : []).forEach(m => {
+    const created = new Date(m.created_at);
+    const weekStart = new Date(created);
+    weekStart.setDate(created.getDate() - created.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    const key = weekStart.toISOString().slice(0, 10);
+    if (key in weekBuckets) weekBuckets[key]++;
+  });
+  const weekRows = Object.entries(weekBuckets).sort((a, b) => b[0].localeCompare(a[0]));
+
+  pageEl.innerHTML = `
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-weight:600; margin-bottom:8px;">ยอดขายแยกเมนู</div>
+      ${salesRows.length === 0 ? `<p style="color:var(--text-muted); font-size:13px;">ยังไม่มีข้อมูล</p>` : salesRows.map(([name, count]) => `
+        <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:0.5px solid var(--border); font-size:13px;">
+          <span>${name}</span><span style="color:var(--text-secondary);">${count} แก้ว</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-weight:600; margin-bottom:8px;">สัดส่วน Tier</div>
+      <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
+        <div class="stat-card"><div class="stat-value">${tierCount.sip}</div><div class="stat-label">Sip</div></div>
+        <div class="stat-card"><div class="stat-value">${tierCount.drink}</div><div class="stat-label">Drink</div></div>
+        <div class="stat-card"><div class="stat-value">${tierCount.slurpp}</div><div class="stat-label">Slurpp</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:8px;">สมาชิกใหม่รายสัปดาห์ (8 สัปดาห์ล่าสุด)</div>
+      ${weekRows.map(([week, count]) => `
+        <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:0.5px solid var(--border); font-size:13px;">
+          <span>สัปดาห์ของ ${week}</span><span style="color:var(--text-secondary);">${count} คน</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function renderStaff() {
+  pageEl.innerHTML = `<p style="color:var(--text-muted); font-size:13px;">กำลังโหลด...</p>`;
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/list-staff-accounts`, {
+    method: "POST",
+    headers: { ...restHeaders(), "Content-Type": "application/json" },
+  });
+  const data = await res.json();
+  const accounts = data.accounts ?? [];
+
+  pageEl.innerHTML = `
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:8px;">บัญชีพนักงาน/แอดมิน</div>
+      ${accounts.length === 0 ? `<p style="color:var(--text-muted); font-size:13px;">ไม่พบบัญชี</p>` : accounts.map(a => `
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:0.5px solid var(--border); font-size:13px;">
+          <span>${a.email}</span>
+          <span style="color:var(--text-secondary); font-size:12px;">เข้าระบบล่าสุด: ${a.last_sign_in_at ? new Date(a.last_sign_in_at).toLocaleDateString('th-TH') : 'ยังไม่เคย'}</span>
+        </div>
+      `).join('')}
+      <p style="font-size:12px; color:var(--text-muted); margin-top:12px;">เพิ่ม/ลบบัญชีผ่าน Supabase Dashboard → Authentication → Users เท่านั้น (ยังไม่มีระบบสิทธิ์แยก staff/admin จึงยังไม่เปิดให้จัดการตรงนี้)</p>
+    </div>
+  `;
 }
 
 init();
